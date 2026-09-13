@@ -1,0 +1,245 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  role      UserRole @default(OWNER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs AuditLog[]
+}
+
+model VisitorSession {
+  id          String   @id
+  ipAddress   String
+  protocol    String
+  userAgent   String?
+  referrer    String?
+  page        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastSeenAt  DateTime @default(now())
+
+  telemetry            Telemetry[]
+  networkObservations  NetworkObservation[]
+  deviceCapabilities   DeviceCapability[]
+  permissions          PermissionEvent[]
+  locationGrants       LocationGrant[]
+  media                Media[]
+  mediaEvents          MediaEvent[]
+  auditLogs            AuditLog[]
+
+  @@index([createdAt])
+  @@index([lastSeenAt])
+}
+
+model Telemetry {
+  id        String   @id @default(cuid())
+  sessionId String
+  category  TelemetryCategory
+  source    TelemetrySource
+  payload   Json
+  createdAt DateTime @default(now())
+
+  session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model NetworkObservation {
+  id          String   @id @default(cuid())
+  sessionId   String
+  country     String?
+  region      String?
+  city        String?
+  timezone    String?
+  isp         String?
+  asn         String?
+  latitude    Float?
+  longitude   Float?
+  source      String   @default("request_headers")
+  createdAt   DateTime @default(now())
+
+  session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model DeviceCapability {
+  id        String   @id @default(cuid())
+  sessionId String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model PermissionEvent {
+  id         String           @id @default(cuid())
+  sessionId  String
+  capability PermissionKind
+  state      PermissionState
+  source     TelemetrySource
+  createdAt  DateTime         @default(now())
+
+  session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model LocationGrant {
+  id        String   @id @default(cuid())
+  sessionId String
+  latitude  Float
+  longitude Float
+  accuracy  Float
+  altitude  Float?
+  heading   Float?
+  speed     Float?
+  grantedAt DateTime @default(now())
+  deletedAt DateTime?
+
+  session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([grantedAt])
+}
+
+model Media {
+  id           String    @id @default(cuid())
+  sessionId    String
+  objectKey    String    @unique
+  mediaType    MediaType
+  mimeType     String
+  byteSize     Int
+  durationMs   Int?
+  consentState ConsentState
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+
+  session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  events  MediaEvent[]
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model MediaEvent {
+  id        String   @id @default(cuid())
+  sessionId String
+  mediaId   String?
+  event     String
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  session VisitorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  media   Media?         @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  userId    String?
+  sessionId String?
+  action    AuditAction
+  actor     AuditActor
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  user    User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  session VisitorSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model RetentionSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  days      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum UserRole {
+  OWNER
+}
+
+enum TelemetryCategory {
+  CLIENT
+  DEVICE
+  NETWORK
+  CAPABILITY
+}
+
+enum TelemetrySource {
+  AUTOMATIC
+  EXPLICIT_PERMISSION
+  OWNER
+}
+
+enum PermissionKind {
+  CAMERA
+  MICROPHONE
+  LOCATION
+}
+
+enum PermissionState {
+  LOCKED
+  PROMPT
+  GRANTED
+  DENIED
+  UNSUPPORTED
+}
+
+enum ConsentState {
+  EXPLICIT_SUBMISSION
+  DELETED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+}
+
+enum AuditActor {
+  VISITOR
+  OWNER
+  SYSTEM
+}
+
+enum AuditAction {
+  SESSION_CREATED
+  TELEMETRY_RECEIVED
+  PERMISSION_GRANTED
+  PERMISSION_DENIED
+  LOCATION_RECEIVED
+  LOCATION_DELETED
+  RECORDING_STARTED
+  RECORDING_STOPPED
+  MEDIA_UPLOADED
+  MEDIA_DELETED
+  OWNER_LOGIN
+  OWNER_LOGOUT
+  OWNER_ACCESSED_MEDIA
+  OWNER_DELETED_SESSION
+  RETENTION_UPDATED
+}
